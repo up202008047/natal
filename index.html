@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Amigo Secreto de Natal</title>
+  <!--
+    ════════════════════════════════════════════════════════════════════
+      Amigo Secreto de Natal — página de revelação
+    ════════════════════════════════════════════════════════════════════
+    Como funciona (sem servidor nem base de dados):
+      • Cada pessoa recebe um link do tipo  https://…/natal/#<código>
+      • O <código> é um JSON {"de": …, "para": …, "orcamento": …, "data": …}
+        em Base64 seguro para URLs, criado pelo gerar_sorteio.py.
+      • Tudo o que vem depois do "#" NUNCA é enviado ao servidor: é esta
+        página que o lê, diretamente no telemóvel de quem abre o link.
+
+    Ficheiro único (HTML + CSS + JS), sem dependências externas.
+    Para alojar: põe APENAS este ficheiro num repositório do GitHub e ativa
+    o GitHub Pages (Settings → Pages).
+  -->
+  <meta name="description" content="Abre o teu link pessoal e descobre quem te calhou no Amigo Secreto de Natal.">
+  <!-- Pré-visualização quando o link é partilhado no WhatsApp. É igual para toda
+       a gente (o código depois do # não chega ao servidor), por isso não revela nada. -->
+  <meta property="og:title" content="🎄 Amigo Secreto de Natal">
+  <meta property="og:description" content="Abre o teu link pessoal e descobre quem te calhou!">
+  <meta property="og:type" content="website">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0f3a2c">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%84%3C/text%3E%3C/svg%3E">
+
+  <style>
+    /* ============================================================
+       1. Cores, letras e medidas (muda aqui para personalizar)
+       ============================================================ */
+    :root {
+      --pinho: #0f3a2c;          /* verde-pinheiro do fundo */
+      --creme: #fffaf1;          /* "papel" dos cartões */
+      --creme-escuro: #f3e8d4;
+      --tinta: #2a211c;          /* texto principal */
+      --tinta-suave: #6b5f56;    /* texto secundário */
+      --vermelho: #c7363f;
+      --vermelho-escuro: #9e2731;
+      --dourado: #e2b155;
+      --dourado-claro: #f4d690;
+      --raio: 24px;
+      --sombra: 0 24px 60px -24px rgba(0, 0, 0, .65), 0 2px 8px rgba(0, 0, 0, .18);
+      /* Só fontes do sistema: carrega instantaneamente e não depende de ninguém. */
+      --letra-titulos: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --letra-texto: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    /* ============================================================
+       2. Base e esqueleto da página
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }   /* o atributo "hidden" ganha sempre */
+
+    html { -webkit-text-size-adjust: 100%; }
+    p { text-wrap: pretty; }              /* evita palavras sozinhas na última linha */
+    h1, h2 { text-wrap: balance; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      font-family: var(--letra-texto);
+      font-size: 16px;
+      line-height: 1.55;
+      color: var(--creme);
+      background:
+        radial-gradient(ellipse 130% 55% at 50% 0%, rgba(74, 150, 112, .38), transparent 70%),
+        radial-gradient(ellipse 90% 45% at 50% 100%, rgba(0, 0, 0, .35), transparent 70%),
+        var(--pinho);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .pagina {
+      position: relative;
+      z-index: 1;                /* fica por cima da neve */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      max-width: 440px;
+      min-height: 100vh;
+      min-height: 100dvh;
+      margin: 0 auto;
+      padding: max(28px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+               max(28px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+    }
+
+    .ecra { display: flex; flex-direction: column; gap: 18px; }
+
+    /* ============================================================
+       3. Cabeçalho ("Olá, Nome!")
+       ============================================================ */
+    .topo { text-align: center; padding: 0 4px; }
+
+    .estrela {
+      display: block;
+      width: 30px;
+      height: 30px;
+      margin: 0 auto;
+      fill: var(--dourado);
+      filter: drop-shadow(0 0 10px rgba(244, 214, 144, .6));
+      animation: pulsar 3.2s ease-in-out infinite;
+    }
+
+    .selo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin: 8px 0 6px;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      white-space: nowrap;       /* numa linha só; em ecrãs estreitos encolhem os traços */
+      color: var(--dourado-claro);
+    }
+    .selo::before, .selo::after { content: ""; flex: 0 1 26px; height: 1px; background: currentColor; opacity: .45; }
+
+    .topo h1 {
+      margin: 0 0 10px;
+      font-family: var(--letra-titulos);
+      font-size: clamp(2.2rem, 10vw, 2.9rem);
+      font-weight: 600;
+      line-height: 1.08;
+      letter-spacing: -.01em;
+      overflow-wrap: anywhere;
+    }
+
+    .intro { max-width: 32ch; margin: 0 auto; color: rgba(255, 250, 241, .78); }
+
+    /* ============================================================
+       4. Cartão principal (presente + revelação)
+       ============================================================ */
+    .cartao {
+      position: relative;
+      overflow: hidden;
+      padding: 34px 22px 24px;
+      border-radius: var(--raio);
+      background: var(--creme);
+      color: var(--tinta);
+      text-align: center;
+      box-shadow: var(--sombra);
+    }
+    /* Faixa às riscas no topo, estilo bengala de Natal */
+    .cartao::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 8px;
+      background: repeating-linear-gradient(-45deg, var(--vermelho) 0 10px, var(--creme) 10px 20px);
+    }
+
+    .rotulo { margin: 0; font-size: .95rem; color: var(--tinta-suave); }
+
+    /* O "palco": o presente e o nome ocupam o mesmo sítio (ficam empilhados). */
+    .palco {
+      display: grid;
+      place-items: center;
+      min-height: 160px;
+      margin: 6px 0 16px;
+    }
+    .palco > * { grid-area: 1 / 1; }
+
+    /* --- O presente (SVG) --- */
+    .presente {
+      width: 136px;
+      transition: opacity .35s ease .2s, transform .45s ease .15s;
+    }
+    .presente svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+      animation: flutuar 3.4s ease-in-out infinite;
+    }
+    .presente .tampa {
+      transform-box: fill-box;
+      transform-origin: 50% 100%;
+      transition: transform .5s cubic-bezier(.2, .9, .3, 1.2), opacity .4s ease .15s;
+    }
+    .presente .brilhos path {
+      fill: var(--dourado);
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: cintilar 2.4s ease-in-out infinite;
+    }
+    .presente .brilhos path:nth-child(2) { animation-delay: .8s; }
+    .presente .brilhos path:nth-child(3) { animation-delay: 1.6s; }
+
+    /* A abrir: o presente abana durante um instante... */
+    .a-abrir .presente { animation: abanar .6s ease-in-out; }
+
+    /* ...e depois a tampa salta, o presente desaparece e surge o nome. */
+    .revelado .presente { opacity: 0; transform: translateY(-12px) scale(.6); }
+    .revelado .presente .tampa { transform: translate(-16px, -58px) rotate(-30deg); opacity: 0; }
+
+    .nome-sorteado {
+      margin: 0;
+      padding: 0 6px;
+      font-family: var(--letra-titulos);
+      font-size: clamp(2.3rem, 11vw, 3.1rem);
+      font-weight: 700;
+      line-height: 1.05;
+      color: var(--vermelho-escuro);
+      overflow-wrap: anywhere;
+      opacity: 0;
+      transform: scale(.4);
+    }
+    .nome-sorteado::after {      /* pequeno traço dourado por baixo do nome */
+      content: "";
+      display: block;
+      width: 56px;
+      height: 3px;
+      margin: 14px auto 0;
+      border-radius: 3px;
+      background: var(--dourado);
+    }
+    .revelado .nome-sorteado {
+      opacity: 1;
+      transform: none;
+      transition: opacity .3s ease .3s, transform .7s cubic-bezier(.34, 1.56, .64, 1) .3s;
+    }
+
+    .dica {
+      max-width: 30ch;
+      margin: 0 auto 6px;
+      font-size: .95rem;
+      color: var(--tinta-suave);
+      animation: aparecer .5s ease .7s both;
+    }
+
+    /* --- Botões --- */
+    .botao {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 56px;
+      padding: 14px 22px;
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #d6454e 0%, var(--vermelho) 55%, var(--vermelho-escuro) 100%);
+      box-shadow: 0 12px 24px -12px rgba(158, 39, 49, .95), inset 0 1px 0 rgba(255, 255, 255, .25);
+      color: #fff;
+      font: inherit;
+      font-size: 1.06rem;
+      font-weight: 700;
+      letter-spacing: .01em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform .15s ease, filter .15s ease;
+    }
+    .botao:hover { filter: brightness(1.06); }
+    .botao:active { transform: translateY(1px) scale(.985); }
+    .botao:disabled { cursor: progress; }
+
+    .botao-texto {
+      padding: 10px 14px;
+      border: 0;
+      background: none;
+      color: var(--tinta-suave);
+      font: inherit;
+      font-size: .92rem;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+      animation: aparecer .5s ease .9s both;
+    }
+
+    .botao:focus-visible,
+    .botao-texto:focus-visible { outline: 3px solid var(--dourado); outline-offset: 3px; }
+
+    /* Telemóveis muito estreitos (ex.: iPhone SE de 1.ª geração): o botão cabe numa linha. */
+    @media (max-width: 374px) {
+      .cartao { padding-left: 16px; padding-right: 16px; }
+      .botao { gap: 8px; padding-left: 12px; padding-right: 12px; font-size: 1rem; }
+    }
+
+    /* ============================================================
+       5. Cartão discreto das regras
+       ============================================================ */
+    .regras {
+      padding: 18px 18px 6px;
+      border: 1px solid rgba(255, 250, 241, .12);
+      border-radius: 20px;
+      background: rgba(255, 250, 241, .06);
+    }
+    .regras h2 {
+      margin: 0 0 4px;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--dourado-claro);
+    }
+    .regras ul { list-style: none; margin: 0; padding: 0; }
+    .regras li { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; }
+    .regras li + li { border-top: 1px solid rgba(255, 250, 241, .09); }
+    .icone {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: rgba(255, 250, 241, .09);
+      font-size: 1.15rem;
+      line-height: 1;
+    }
+    .regras strong { display: block; font-size: .95rem; font-weight: 650; }
+    .regras .texto { display: block; font-size: .9rem; color: rgba(255, 250, 241, .72); }
+
+    .rodape { margin: 0; text-align: center; font-size: .8rem; color: rgba(255, 250, 241, .55); }
+
+    /* ============================================================
+       6. Ecrã de erro
+       ============================================================ */
+    .cartao-erro { padding-top: 40px; }
+    .erro-icone { margin-bottom: 12px; font-size: 3.4rem; line-height: 1; }
+    .cartao-erro h1 {
+      margin: 0 0 10px;
+      font-family: var(--letra-titulos);
+      font-size: 1.7rem;
+      font-weight: 600;
+      line-height: 1.15;
+    }
+    .cartao-erro p { margin: 0; color: var(--tinta-suave); }
+    .cartao-erro .erro-dica {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: var(--creme-escuro);
+      font-size: .92rem;
+    }
+
+    /* ============================================================
+       7. Neve e confettis
+       ============================================================ */
+    .neve { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+    .floco {
+      position: absolute;
+      top: -10px;
+      border-radius: 50%;
+      background: #fff;
+      animation-name: cair;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+      will-change: transform;
+    }
+    .confetis {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    /* ============================================================
+       8. Animações
+       ============================================================ */
+    @keyframes cair {
+      from { transform: translate3d(0, -5vh, 0); }
+      to   { transform: translate3d(var(--deriva, 20px), 105vh, 0); }
+    }
+    @keyframes flutuar {
+      0%, 100% { transform: translateY(0) rotate(0); }
+      50%      { transform: translateY(-6px) rotate(-1.5deg); }
+    }
+    @keyframes abanar {
+      0%, 100% { transform: rotate(0); }
+      15% { transform: rotate(-9deg) scale(1.04); }
+      30% { transform: rotate(8deg) scale(1.06); }
+      45% { transform: rotate(-7deg) scale(1.06); }
+      60% { transform: rotate(6deg) scale(1.04); }
+      75% { transform: rotate(-3deg); }
+    }
+    @keyframes cintilar {
+      0%, 100% { opacity: .3; transform: scale(.7); }
+      50%      { opacity: 1; transform: scale(1); }
+    }
+    @keyframes pulsar {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: .75; transform: scale(.9); }
+    }
+    @keyframes aparecer {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    /* Quem pediu ao sistema "menos movimento" não vê animações nem neve. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-delay: 0s !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        transition-delay: 0s !important;
+      }
+      .neve { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Neve a cair no fundo (os flocos são criados pelo JavaScript) -->
+  <div class="neve" id="neve" aria-hidden="true"></div>
+
+  <main class="pagina">
+
+    <!-- ══════════ ECRÃ 1 · Link válido ══════════ -->
+    <div class="ecra" id="ecra-sorteio" hidden>
+      <header class="topo">
+        <svg class="estrela" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 2 14.6 8.9 22 9.3 16.2 13.9 18.2 21 12 17 5.8 21 7.8 13.9 2 9.3 9.4 8.9Z"/>
+        </svg>
+        <p class="selo">Amigo Secreto de Natal</p>
+        <h1>Olá, <span id="nome-de"></span>!</h1>
+        <p class="intro">O sorteio já está feito. Quando ninguém estiver a espreitar, carrega no botão para descobrires a quem vais oferecer a prenda.</p>
+      </header>
+
+      <section class="cartao" id="cartao-revelar" aria-labelledby="rotulo">
+        <p class="rotulo" id="rotulo">Quem será que te calhou?</p>
+
+        <!-- O presente e o nome partilham este espaço. O nome só é escrito
+             aqui quando a pessoa carrega no botão (antes disso, nem existe na página). -->
+        <div class="palco" id="palco" aria-live="polite">
+          <div class="presente" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <g class="brilhos">
+                <path d="M100 13 102.1 17.9 107 20 102.1 22.1 100 27 97.9 22.1 93 20 97.9 17.9Z"/>
+                <path d="M18 27 19.5 30.5 23 32 19.5 33.5 18 37 16.5 33.5 13 32 16.5 30.5Z"/>
+                <path d="M110 72 111.2 74.8 114 76 111.2 77.2 110 80 108.8 77.2 106 76 108.8 74.8Z"/>
+              </g>
+              <g class="caixa">
+                <rect x="20" y="54" width="80" height="54" rx="8" fill="#c7363f"/>
+                <rect x="20" y="56" width="80" height="7" fill="#000" opacity=".13"/>
+                <rect x="53" y="54" width="14" height="54" fill="#e2b155"/>
+              </g>
+              <g class="tampa">
+                <rect x="14" y="40" width="92" height="18" rx="6" fill="#d9444d"/>
+                <rect x="53" y="40" width="14" height="18" fill="#e2b155"/>
+                <path d="M60 41C52 27 34 23 36 33 37.5 40 50 41 60 41Z" fill="#e2b155"/>
+                <path d="M60 41C68 27 86 23 84 33 82.5 40 70 41 60 41Z" fill="#e2b155"/>
+                <circle cx="60" cy="40" r="5.5" fill="#c9963e"/>
+              </g>
+            </svg>
+          </div>
+          <p class="nome-sorteado" id="nome-para"></p>
+        </div>
+
+        <p class="dica" id="dica" hidden>Agora é contigo: pensa numa prenda que arranque uma gargalhada ou que toque o coração. 💛</p>
+
+        <button class="botao" id="botao-revelar" type="button">
+          <span aria-hidden="true">🎁</span> Revelar Amigo Secreto
+        </button>
+        <button class="botao-texto" id="botao-esconder" type="button" hidden>Esconder outra vez</button>
+      </section>
+
+      <section class="regras" aria-labelledby="titulo-regras">
+        <h2 id="titulo-regras">As regras</h2>
+        <ul>
+          <li>
+            <span class="icone" aria-hidden="true">🎁</span>
+            <span>
+              <strong>Engraçada ou sentimental</strong>
+              <span class="texto">É esse o objetivo da prenda: fazer rir ou tocar o coração. Não precisa de ser cara!</span>
+            </span>
+          </li>
+          <li id="regra-orcamento">
+            <span class="icone" aria-hidden="true">💶</span>
+            <span>
+              <strong>Orçamento máximo</strong>
+              <span class="texto valor"></span>
+            </span>
+          </li>
+          <li id="regra-data">
+            <span class="icone" aria-hidden="true">📅</span>
+            <span>
+              <strong>Troca de prendas</strong>
+              <span class="texto valor"></span>
+            </span>
+          </li>
+          <li>
+            <span class="icone" aria-hidden="true">🤫</span>
+            <span>
+              <strong>Bico calado</strong>
+              <span class="texto">Ninguém pode saber quem te calhou até ao dia da troca.</span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <p class="rodape">🔒 O teu sorteio vive só neste link: não é enviado nem guardado em servidor nenhum.</p>
+    </div>
+
+    <!-- ══════════ ECRÃ 2 · Link em falta ou inválido ══════════ -->
+    <section class="cartao cartao-erro" id="ecra-erro" hidden>
+      <div class="erro-icone" aria-hidden="true">☃️</div>
+      <h1 id="erro-titulo"></h1>
+      <p id="erro-texto"></p>
+      <p class="erro-dica">Volta à mensagem que recebeste e abre o link completo. Se mesmo assim não der, pede um link novo a quem organizou o sorteio. 🎄</p>
+    </section>
+
+    <noscript>
+      <section class="cartao cartao-erro">
+        <div class="erro-icone" aria-hidden="true">🎄</div>
+        <h1>Falta o JavaScript</h1>
+        <p>Esta página precisa de JavaScript para revelar o teu amigo secreto. Ativa-o no browser e volta a abrir o link.</p>
+      </section>
+    </noscript>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    const $ = (id) => document.getElementById(id);
+    const reduzirMovimento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* ---------------------------------------------------------------
+       1. Ler o sorteio a partir do link
+       --------------------------------------------------------------- */
+
+    /**
+     * Base64 "seguro para URLs" → texto.
+     * O Python usou "-" e "_" em vez de "+" e "/" e tirou os "=" do fim;
+     * aqui desfaz-se isso. O atob() devolve bytes soltos e o TextDecoder
+     * junta-os em caracteres UTF-8: é isto que faz "Avó" ou "João"
+     * aparecerem bem (só com atob() apareceria "AvÃ³").
+     */
+    function base64UrlParaTexto(codigo) {
+      let b64 = codigo.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4 !== 0) b64 += '=';
+      const binario = atob(b64);
+      const bytes = Uint8Array.from(binario, (c) => c.charCodeAt(0));
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    }
+
+    /** Devolve { dados } se o link for válido, ou { erro: 'sem-codigo' | 'invalido' }. */
+    function lerSorteioDoLink() {
+      let codigo = window.location.hash.replace(/^#/, '');
+      if (!codigo.trim()) return { erro: 'sem-codigo' };
+
+      // Algumas apps "mexem" nos links: codificam caracteres ou colam
+      // pontuação no fim. Por isso limpa-se tudo o que não pertence ao Base64.
+      try { codigo = decodeURIComponent(codigo); } catch (e) { /* fica como está */ }
+      codigo = codigo.replace(/[^A-Za-z0-9\-_+\/]/g, '');
+
+      try {
+        const dados = JSON.parse(base64UrlParaTexto(codigo));
+        const eTexto = (v) => typeof v === 'string' && v.trim() !== '';
+        if (!dados || !eTexto(dados.de) || !eTexto(dados.para)) throw new Error('Faltam dados');
+        return { dados };
+      } catch (e) {
+        return { erro: 'invalido' };
+      }
+    }
+
+    /* ---------------------------------------------------------------
+       2. Ecrãs: sorteio ou erro
+       --------------------------------------------------------------- */
+
+    const ERROS = {
+      'sem-codigo': {
+        titulo: 'Falta aqui o teu código',
+        texto: 'Esta página só funciona com o link pessoal que recebeste por mensagem: aquele que tem um código comprido no fim, depois do #.',
+      },
+      'invalido': {
+        titulo: 'Ups! Este link está incompleto',
+        texto: 'Não conseguimos ler o teu sorteio. Normalmente isto acontece quando o link é copiado só em parte ou fica cortado no fim.',
+      },
+    };
+
+    function mostrarErro(tipo) {
+      const erro = ERROS[tipo] || ERROS.invalido;
+      $('erro-titulo').textContent = erro.titulo;
+      $('erro-texto').textContent = erro.texto;
+      $('ecra-erro').hidden = false;
+    }
+
+    /** Preenche uma linha das regras, ou esconde-a se o link não trouxer esse valor. */
+    function preencherRegra(id, valor) {
+      const linha = $(id);
+      if (typeof valor === 'string' && valor.trim()) {
+        linha.querySelector('.valor').textContent = valor.trim();
+      } else {
+        linha.hidden = true;
+      }
+    }
+
+    function mostrarSorteio(dados) {
+      // Atenção: só se usa textContent (nunca innerHTML), para que um link
+      // manipulado não consiga injetar código na página.
+      $('nome-de').textContent = dados.de.trim();
+      preencherRegra('regra-orcamento', dados.orcamento);
+      preencherRegra('regra-data', dados.data);
+      $('ecra-sorteio').hidden = false;
+
+      const cartao = $('cartao-revelar');
+      const botaoRevelar = $('botao-revelar');
+      const botaoEsconder = $('botao-esconder');
+      const nomePara = $('nome-para');
+      const rotulo = $('rotulo');
+      const dica = $('dica');
+
+      // Revelar: abanar o presente → saltar a tampa → mostrar o nome + confettis.
+      botaoRevelar.addEventListener('click', (evento) => {
+        botaoRevelar.disabled = true;
+        cartao.classList.add('a-abrir');
+
+        setTimeout(() => {
+          nomePara.textContent = dados.para.trim();   // só agora o nome entra na página
+          rotulo.textContent = 'O teu amigo secreto é…';
+          cartao.classList.remove('a-abrir');
+          cartao.classList.add('revelado');
+          botaoRevelar.hidden = true;
+          botaoRevelar.disabled = false;
+          dica.hidden = false;
+          botaoEsconder.hidden = false;
+
+          // Quem usa o teclado (evento.detail === 0) não perde o foco.
+          if (evento.detail === 0) botaoEsconder.focus();
+
+          if (!reduzirMovimento) {
+            const palco = $('palco').getBoundingClientRect();
+            lancarConfetis(palco.left + palco.width / 2, palco.top + palco.height / 2);
+          }
+        }, reduzirMovimento ? 0 : 650);
+      });
+
+      // Esconder: tira o nome da página (útil se alguém se aproximar).
+      botaoEsconder.addEventListener('click', (evento) => {
+        cartao.classList.remove('revelado');
+        nomePara.textContent = '';
+        rotulo.textContent = 'Quem será que te calhou?';
+        dica.hidden = true;
+        botaoEsconder.hidden = true;
+        botaoRevelar.hidden = false;
+        if (evento.detail === 0) botaoRevelar.focus();
+      });
+    }
+
+    /* ---------------------------------------------------------------
+       3. Confettis (canvas, sem bibliotecas)
+       --------------------------------------------------------------- */
+    function lancarConfetis(origemX, origemY) {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'confetis';
+      canvas.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(canvas);
+
+      const ctx = canvas.getContext('2d');
+      const largura = window.innerWidth;
+      const altura = window.innerHeight;
+      const escala = Math.min(window.devicePixelRatio || 1, 2);   // nítido, sem pesar demasiado
+      canvas.width = Math.round(largura * escala);
+      canvas.height = Math.round(altura * escala);
+      ctx.scale(escala, escala);
+
+      const cores = ['#c7363f', '#e2b155', '#f4d690', '#2f7d5b', '#fffaf1', '#9e2731'];
+      const pecas = Array.from({ length: 150 }, () => {
+        const angulo = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;   // leque virado para cima
+        const velocidade = 7 + Math.random() * 11;
+        return {
+          x: origemX,
+          y: origemY,
+          vx: Math.cos(angulo) * velocidade,
+          vy: Math.sin(angulo) * velocidade,
+          tamanho: 6 + Math.random() * 6,
+          rotacao: Math.random() * Math.PI * 2,
+          giro: (Math.random() - 0.5) * 0.3,
+          fase: Math.random() * Math.PI * 2,          // para o "vira-vira" do papel
+          cor: cores[Math.floor(Math.random() * cores.length)],
+          redondo: Math.random() < 0.25,
+        };
+      });
+
+      const DURACAO = 4200;   // milissegundos
+      const inicio = performance.now();
+      let anterior = inicio;
+
+      function desenhar(agora) {
+        // dt = 1 a 60 imagens/s: a animação tem a mesma velocidade em ecrãs de 60 ou 120 Hz.
+        const dt = Math.min((agora - anterior) / (1000 / 60), 3);
+        anterior = agora;
+        const decorrido = agora - inicio;
+        const atrito = Math.pow(0.96, dt);
+
+        ctx.clearRect(0, 0, largura, altura);
+        ctx.globalAlpha = Math.min(1, Math.max(0, (DURACAO - decorrido) / 800));   // desvanece no fim
+
+        for (const p of pecas) {
+          p.vx *= atrito;
+          p.vy = p.vy * atrito + 0.25 * dt;               // gravidade
+          p.fase += 0.1 * dt;
+          p.x += (p.vx + Math.sin(p.fase) * 0.6) * dt;    // + um balanço suave
+          p.y += p.vy * dt;
+          p.rotacao += p.giro * dt;
+
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotacao);
+          ctx.scale(1, Math.cos(p.fase));                 // ilusão de o papel girar
+          ctx.fillStyle = p.cor;
+          if (p.redondo) {
+            ctx.beginPath();
+            ctx.arc(0, 0, p.tamanho / 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillRect(-p.tamanho / 2, -p.tamanho / 4, p.tamanho, p.tamanho / 2);
+          }
+          ctx.restore();
+        }
+
+        if (decorrido < DURACAO) requestAnimationFrame(desenhar);
+        else canvas.remove();
+      }
+      requestAnimationFrame(desenhar);
+    }
+
+    /* ---------------------------------------------------------------
+       4. Neve no fundo
+       --------------------------------------------------------------- */
+    function criarNeve() {
+      if (reduzirMovimento) return;
+      const neve = $('neve');
+      const quantidade = window.innerWidth < 600 ? 28 : 46;
+      for (let i = 0; i < quantidade; i++) {
+        const floco = document.createElement('span');
+        const tamanho = 2 + Math.random() * 4;       // 2 a 6 px
+        const duracao = 9 + Math.random() * 12;      // 9 a 21 s a cair
+        floco.className = 'floco';
+        floco.style.left = (Math.random() * 100).toFixed(2) + '%';
+        floco.style.width = floco.style.height = tamanho.toFixed(1) + 'px';
+        floco.style.opacity = (0.25 + Math.random() * 0.55).toFixed(2);
+        floco.style.animationDuration = duracao.toFixed(1) + 's';
+        floco.style.animationDelay = (-Math.random() * duracao).toFixed(1) + 's';   // negativo: já começa a meio
+        floco.style.setProperty('--deriva', Math.round((Math.random() - 0.5) * 90) + 'px');
+        neve.appendChild(floco);
+      }
+    }
+
+    /* ---------------------------------------------------------------
+       5. Arranque
+       --------------------------------------------------------------- */
+    const resultado = lerSorteioDoLink();
+    if (resultado.dados) mostrarSorteio(resultado.dados);
+    else mostrarErro(resultado.erro);
+    criarNeve();
+
+    // Se o link mudar com a página aberta (ex.: colar outro link), recomeça.
+    window.addEventListener('hashchange', () => window.location.reload());
+  })();
+  </script>
+</body>
+</html>
