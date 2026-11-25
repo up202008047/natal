@@ -285,43 +285,7 @@
     }
 
     /* ============================================================
-       5. Cartão discreto das regras
-       ============================================================ */
-    .regras {
-      padding: 18px 18px 6px;
-      border: 1px solid rgba(255, 250, 241, .12);
-      border-radius: 20px;
-      background: rgba(255, 250, 241, .06);
-    }
-    .regras h2 {
-      margin: 0 0 4px;
-      font-size: .75rem;
-      font-weight: 700;
-      letter-spacing: .18em;
-      text-transform: uppercase;
-      color: var(--dourado-claro);
-    }
-    .regras ul { list-style: none; margin: 0; padding: 0; }
-    .regras li { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; }
-    .regras li + li { border-top: 1px solid rgba(255, 250, 241, .09); }
-    .icone {
-      flex: none;
-      display: grid;
-      place-items: center;
-      width: 38px;
-      height: 38px;
-      border-radius: 12px;
-      background: rgba(255, 250, 241, .09);
-      font-size: 1.15rem;
-      line-height: 1;
-    }
-    .regras strong { display: block; font-size: .95rem; font-weight: 650; }
-    .regras .texto { display: block; font-size: .9rem; color: rgba(255, 250, 241, .72); }
-
-    .rodape { margin: 0; text-align: center; font-size: .8rem; color: rgba(255, 250, 241, .55); }
-
-    /* ============================================================
-       6. Ecrã de erro
+       5. Ecrã de erro
        ============================================================ */
     .cartao-erro { padding-top: 40px; }
     .erro-icone { margin-bottom: 12px; font-size: 3.4rem; line-height: 1; }
@@ -342,7 +306,7 @@
     }
 
     /* ============================================================
-       7. Neve e confettis
+       6. Neve e confettis
        ============================================================ */
     .neve { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
     .floco {
@@ -365,7 +329,7 @@
     }
 
     /* ============================================================
-       8. Animações
+       7. Animações
        ============================================================ */
     @keyframes cair {
       from { transform: translate3d(0, -5vh, 0); }
@@ -463,42 +427,6 @@
         </button>
         <button class="botao-texto" id="botao-esconder" type="button" hidden>Esconder outra vez</button>
       </section>
-
-      <section class="regras" aria-labelledby="titulo-regras">
-        <h2 id="titulo-regras">As regras</h2>
-        <ul>
-          <li>
-            <span class="icone" aria-hidden="true">🎁</span>
-            <span>
-              <strong>Engraçada ou sentimental</strong>
-              <span class="texto">É esse o objetivo da prenda: fazer rir ou tocar o coração. Não precisa de ser cara!</span>
-            </span>
-          </li>
-          <li id="regra-orcamento">
-            <span class="icone" aria-hidden="true">💶</span>
-            <span>
-              <strong>Orçamento máximo</strong>
-              <span class="texto valor"></span>
-            </span>
-          </li>
-          <li id="regra-data">
-            <span class="icone" aria-hidden="true">📅</span>
-            <span>
-              <strong>Troca de prendas</strong>
-              <span class="texto valor"></span>
-            </span>
-          </li>
-          <li>
-            <span class="icone" aria-hidden="true">🤫</span>
-            <span>
-              <strong>Bico calado</strong>
-              <span class="texto">Ninguém pode saber quem te calhou até ao dia da troca.</span>
-            </span>
-          </li>
-        </ul>
-      </section>
-
-      <p class="rodape">🔒 O teu sorteio vive só neste link: não é enviado nem guardado em servidor nenhum.</p>
     </div>
 
     <!-- ══════════ ECRÃ 2 · Link em falta ou inválido ══════════ -->
@@ -586,22 +514,10 @@
       $('ecra-erro').hidden = false;
     }
 
-    /** Preenche uma linha das regras, ou esconde-a se o link não trouxer esse valor. */
-    function preencherRegra(id, valor) {
-      const linha = $(id);
-      if (typeof valor === 'string' && valor.trim()) {
-        linha.querySelector('.valor').textContent = valor.trim();
-      } else {
-        linha.hidden = true;
-      }
-    }
-
     function mostrarSorteio(dados) {
       // Atenção: só se usa textContent (nunca innerHTML), para que um link
       // manipulado não consiga injetar código na página.
       $('nome-de').textContent = dados.de.trim();
-      preencherRegra('regra-orcamento', dados.orcamento);
-      preencherRegra('regra-data', dados.data);
       $('ecra-sorteio').hidden = false;
 
       const cartao = $('cartao-revelar');
